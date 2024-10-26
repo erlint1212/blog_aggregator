@@ -3,39 +3,40 @@ package config
 import (
     "encoding/json"
     "os"
+    "io/ioutil"
 )
 
 const configFileName = ".gatorconfig.json"
 
 type Config struct {
-    db_url              string  `json:"db_url"`
-    current_user_name   string  `json:"current_user_name"`
+    DbUrl               string  `json:"db_url"`
+    CurrentUserName     string  `json:"current_user_name"`
 }
 
-func (cfg Config) SetUser(user string) {
-    cfg.current_user_name = user
-}
+func (cfg Config) SetUser(user string) error {
+    cfg.CurrentUserName = user
 
-func Write(cfg Config) error {
-    home_dir, err := os.UserHomeDir()
+    err := write(cfg)
     if err != nil {
-        return  err
+        return err
     }
 
+    return nil
+}
+
+func write(cfg Config) error {
     cfg_json, err := json.Marshal(cfg)
     if err != nil {
         return err
     }
 
-    jsonFile, err := os.Open(home_dir + "/" + configFileName)
+    home_dir, err := os.UserHomeDir()
     if err != nil {
-        return err
+        return  err
     }
-    defer jsonFile.Close()
+    file_path := home_dir + "/" + configFileName
 
-    cfg_json_byte := []byte(cfg_json)
-
-    _, err = jsonFile.Write(cfg_json_byte)
+    err = ioutil.WriteFile(file_path, cfg_json, os.ModePerm)
     if err != nil {
         return err
     }
@@ -54,11 +55,11 @@ func Read() (Config, error) {
         return Config{}, err
     }
 
-    var config Config
-    if err = json.Unmarshal(data, &config); err != nil {
+    var cfg Config
+    if err = json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, err
 	}
 
-    return config, nil
+    return cfg, nil
 }
 
