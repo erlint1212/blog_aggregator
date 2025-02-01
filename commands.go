@@ -1,6 +1,8 @@
 package main
 
 import (
+    "errors"
+    "database/sql"
     "os"
     "github.com/erlint1212/blog_aggregator/internal/config"
     "github.com/erlint1212/blog_aggregator/internal/database"
@@ -82,6 +84,9 @@ func handlerRegister(s *state, cmd command) error {
     }
 
     user, err := s.db.GetUser(ctx, username)
+    if err != nil && !errors.Is(err, sql.ErrNoRows) {
+        return err
+    }
     if user.Name == username {
         os.Exit(1)
     }
