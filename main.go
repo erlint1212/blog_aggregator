@@ -1,27 +1,40 @@
 package main
 
+import _ "github.com/lib/pq" //Import for side effect, not because you need it
+
 import (
     "github.com/erlint1212/blog_aggregator/internal/config"
+    "github.com/erlint1212/blog_aggregator/internal/database"
     "os"
     "fmt"
+    "log"
+    "database/sql"
 )
+
 
 func check(err error) {
     if err != nil {
-        fmt.Fprintf(os.Stderr, "error: %v\n", err)
-        os.Exit(1)
+        log.Fatalf("error: %v\n", err)
     }
 }
 
 func main() {
+
     cfg, err := config.Read()
     check(err)
 
-    cfg_state := state{&cfg}
+    db, err := sql.Open("postgres", cfg.DbUrl)
+    //db, err := sql.Open("postgres", "user=test password=test dbname=test sslmode=disable")
+    check(err)
+
+    dbQueries := database.New(db)
+
+    cfg_state := state{dbQueries, &cfg}
 
     commands := commands{make(map[string]func(*state, command) error)}
 
     commands.register("login", handlerLogin)
+    commands.register("register", handlerRegister)
 
     args := os.Args[1:] //Without prog
     if len(args) < 1 {

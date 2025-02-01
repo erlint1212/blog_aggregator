@@ -1,1 +1,1 @@
-echo '{"db_url": "postgres://example"}' >| ~/.gatorconfig.json
+echo '{"db_url": "postgres://postgres:postgres@localhost:5432/gator"}' >| ~/.gatorconfig.json

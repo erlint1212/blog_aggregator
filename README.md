@@ -19,3 +19,11 @@ Build a blog aggregator microservice in Go. Put your API, database, and web scra
 * Practice using your SQL skills to query and migrate a database (using sqlc and goose, two lightweight tools for typesafe SQL in Go)
 * Learn how to write a long-running service that continuously fetches new posts from RSS feeds and stores them in the database
 
+## Make proper nix env later
+
+```
+go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+go get github.com/google/uuid
+go get github.com/lib/pq
+```
+
