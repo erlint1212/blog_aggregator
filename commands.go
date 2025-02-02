@@ -170,3 +170,59 @@ func handlerAgg(s *state, cmd command) error {
 
     return nil
 }
+
+func handlerAddFeed(s *state, cmd command) error {
+    if len(cmd.args) != 2 {
+        return fmt.Errorf("the addfeed handler expects a two argument, name and url.")
+    }
+
+    name := cmd.args[0]
+    url := cmd.args[1]
+
+    ctx := context.Background()
+    current_user, err := s.db.GetUser(ctx, s.cfg.CurrentUserName)
+    if err != nil {
+        return err
+    }
+    
+    feed_params := database.CreateFeedParams{
+        uuid.New(),
+        time.Now(),
+        time.Now(),
+        name,
+        url,
+        current_user.ID,
+    }
+
+    _, err = s.db.CreateFeed(ctx, feed_params)
+    if err != nil {
+        return err
+    }
+
+    fmt.Printf("Feed \"%s\" has been created\n", name)
+    fmt.Printf("%+v\n", feed_params)
+
+    return nil
+}
+
+func handlerFeeds(s *state, cmd command) error {
+    if len(cmd.args) != 0 {
+        return fmt.Errorf("There should be no arguments for feeds command")
+    }
+
+    ctx := context.Background()
+    feeds, err := s.db.GetAllFeeds(ctx)
+    if err != nil {
+        return err
+    }
+
+    for i := 0; i < len(feeds); i++ {
+        creator_user, err := s.db.GetUserByID(ctx, feeds[i].UserID)
+        if err != nil {
+            return err
+        }
+        fmt.Printf("Name: %s URL: %s Username: %s\n", feeds[i].Name, feeds[i].Url, creator_user.Name)
+    }
+
+    return nil
+}
