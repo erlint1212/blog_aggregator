@@ -24,7 +24,6 @@ func main() {
     check(err)
 
     db, err := sql.Open("postgres", cfg.DbUrl)
-    //db, err := sql.Open("postgres", "user=test password=test dbname=test sslmode=disable")
     check(err)
 
     dbQueries := database.New(db)
@@ -35,6 +34,9 @@ func main() {
 
     commands.register("login", handlerLogin)
     commands.register("register", handlerRegister)
+    commands.register("reset", handlerReset)
+    commands.register("users", handlerUsers)
+    commands.register("agg", handlerAgg)
 
     args := os.Args[1:] //Without prog
     if len(args) < 1 {

@@ -3,13 +3,13 @@ package main
 import (
     "errors"
     "database/sql"
-    "os"
     "github.com/erlint1212/blog_aggregator/internal/config"
     "github.com/erlint1212/blog_aggregator/internal/database"
     "fmt"
     "time"
     "context"
 	"github.com/google/uuid"
+    "html"
 )
 
 type state struct {
@@ -88,7 +88,7 @@ func handlerRegister(s *state, cmd command) error {
         return err
     }
     if user.Name == username {
-        os.Exit(1)
+        return fmt.Errorf("The user is already in the database")
     }
 
     _, err = s.db.CreateUser(ctx, user_params)
@@ -103,6 +103,70 @@ func handlerRegister(s *state, cmd command) error {
 
     fmt.Printf("User %s has been created\n", username)
     fmt.Printf("%+v\n", user_params)
+
+    return nil
+}
+
+func handlerReset(s *state, cmd command) error {
+    if len(cmd.args) != 0 {
+        return fmt.Errorf("There should be no arguments for reset command")
+    }
+
+    ctx := context.Background()
+    err := s.db.DeleteAllUsers(ctx)
+    if err != nil {
+        return err
+    }
+
+    fmt.Printf("All rows in 'users' table have been deleted\n")
+    return nil
+}
+
+func handlerUsers(s *state, cmd command) error {
+    if len(cmd.args) != 0 {
+        return fmt.Errorf("There should be no arguments for agg command")
+    }
+
+    ctx := context.Background()
+    users, err := s.db.GetAllUsers(ctx)
+    if err != nil {
+        return err
+    }
+
+    current_loggedIn_user := s.cfg.CurrentUserName 
+
+    for i := 0; i < len(users); i++ {
+        special_status := ""
+        if users[i].Name == current_loggedIn_user {
+            special_status = " (current)"
+        }
+        fmt.Printf("* %s%s\n", users[i].Name, special_status)
+    }
+
+    return nil
+}
+
+func handlerAgg(s *state, cmd command) error {
+    if len(cmd.args) != 0 {
+        return fmt.Errorf("There should be no arguments for agg command")
+    }
+
+    const feedURL = "https://www.wagslane.dev/index.xml"
+    ctx := context.Background()
+
+    RSSFeed, err := fetchFeed(ctx, feedURL)
+    if err != nil {
+        return err
+    }
+
+    RSSFeed.Channel.Title = html.UnescapeString(RSSFeed.Channel.Title)
+    RSSFeed.Channel.Description = html.UnescapeString(RSSFeed.Channel.Description)
+    for i := 0; i < len(RSSFeed.Channel.Item); i++ {
+        RSSFeed.Channel.Item[i].Title = html.UnescapeString(RSSFeed.Channel.Item[i].Title)
+        RSSFeed.Channel.Item[i].Description = html.UnescapeString(RSSFeed.Channel.Item[i].Description)
+    }
+
+    fmt.Printf("%+v\n", RSSFeed)
 
     return nil
 }

@@ -26,4 +26,12 @@ go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 go get github.com/google/uuid
 go get github.com/lib/pq
 ```
+Important tools used
 
+* PostgreSQL
+* sqlc (generate go code from sql query files)
+
+## TODO
+
+Config file is not properly isolated, add a proper Mutex to it so read/write
+operations don't get screwed in the future.
