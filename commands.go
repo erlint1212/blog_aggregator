@@ -9,7 +9,6 @@ import (
     "time"
     "context"
 	"github.com/google/uuid"
-    "html"
 )
 
 type state struct {
@@ -42,6 +41,24 @@ func (c *commands) run(s *state, cmd command) error {
     }
 
     return nil
+}
+
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+    return func(s *state, cmd command) error {
+        ctx := context.Background()
+        current_user, err := s.db.GetUser(ctx, s.cfg.CurrentUserName)
+        if err != nil {
+            return err
+        }
+
+        err = handler(s, cmd, current_user)
+        if err != nil {
+            return err
+        }
+
+        return nil
+    }
+    
 }
 
 func handlerLogin(s *state, cmd command) error {
@@ -147,31 +164,29 @@ func handlerUsers(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-    if len(cmd.args) != 0 {
-        return fmt.Errorf("There should be no arguments for agg command")
+    if len(cmd.args) != 1 {
+        return fmt.Errorf("There should be 1 argument for agg command, time_between_reqs")
     }
 
-    const feedURL = "https://www.wagslane.dev/index.xml"
-    ctx := context.Background()
-
-    RSSFeed, err := fetchFeed(ctx, feedURL)
+    time_between_reqs, err := time.ParseDuration(cmd.args[0])
     if err != nil {
         return err
     }
 
-    RSSFeed.Channel.Title = html.UnescapeString(RSSFeed.Channel.Title)
-    RSSFeed.Channel.Description = html.UnescapeString(RSSFeed.Channel.Description)
-    for i := 0; i < len(RSSFeed.Channel.Item); i++ {
-        RSSFeed.Channel.Item[i].Title = html.UnescapeString(RSSFeed.Channel.Item[i].Title)
-        RSSFeed.Channel.Item[i].Description = html.UnescapeString(RSSFeed.Channel.Item[i].Description)
-    }
+    fmt.Printf("Collecting feeds every %s\n", time_between_reqs)
 
-    fmt.Printf("%+v\n", RSSFeed)
+    ticker := time.NewTicker(time_between_reqs)
+    for ; ; <-ticker.C {
+        err = scrapeFeeds(s)
+        if err != nil {
+            return err
+        }
+    }
 
     return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, current_user database.User) error {
     if len(cmd.args) != 2 {
         return fmt.Errorf("the addfeed handler expects a two argument, name and url.")
     }
@@ -180,10 +195,6 @@ func handlerAddFeed(s *state, cmd command) error {
     url := cmd.args[1]
 
     ctx := context.Background()
-    current_user, err := s.db.GetUser(ctx, s.cfg.CurrentUserName)
-    if err != nil {
-        return err
-    }
     
     feed_params := database.CreateFeedParams{
         uuid.New(),
@@ -194,9 +205,16 @@ func handlerAddFeed(s *state, cmd command) error {
         current_user.ID,
     }
 
-    _, err = s.db.CreateFeed(ctx, feed_params)
+    feed, err := s.db.CreateFeed(ctx, feed_params)
     if err != nil {
         return err
+    }
+    
+    cmd_follow_url := cmd
+    cmd_follow_url.args = []string{feed.Url}
+    err = middlewareLoggedIn(handlerFollow)(s, cmd_follow_url)
+    if err != nil {
+        return fmt.Errorf("Feed created but unable to follow feed: %s", err)
     }
 
     fmt.Printf("Feed \"%s\" has been created\n", name)
@@ -223,6 +241,85 @@ func handlerFeeds(s *state, cmd command) error {
         }
         fmt.Printf("Name: %s URL: %s Username: %s\n", feeds[i].Name, feeds[i].Url, creator_user.Name)
     }
+
+    return nil
+}
+
+func handlerFollow(s *state, cmd command, current_user database.User) error {
+    if len(cmd.args) != 1 {
+        return fmt.Errorf("There should be one arguments for follow command, url")
+    }
+
+    url := cmd.args[0]
+    
+    ctx := context.Background()
+
+    feed, err := s.db.GetFeedByURL(ctx, url)
+    if err != nil {
+        return err
+    }
+    
+    feedFollow_params := database.CreateFeedFollowParams{
+        uuid.New(),
+        time.Now(),
+        time.Now(),
+        feed.ID,
+        current_user.ID,
+    }
+
+    feed_follow, err := s.db.CreateFeedFollow(ctx, feedFollow_params)
+    if err != nil {
+        return err
+    }
+
+    fmt.Printf("Feed_follow has been created\n")
+    fmt.Printf("User: \"%s\" Title: \"%s\" \n", feed_follow.UserName, feed_follow.FeedName)
+
+    return nil
+}
+
+func handlerFollowing(s *state, cmd command, current_user database.User) error {
+    if len(cmd.args) != 0 {
+        return fmt.Errorf("There should be no arguments for following command")
+    }
+
+    username := s.cfg.CurrentUserName
+
+    ctx := context.Background()
+
+    feed_follows, err := s.db.GetFeedFollowsForUser(ctx, username)
+    if err != nil {
+        return err
+    }
+
+    fmt.Printf("Feeds user \"%s\" is currently following\n", username)
+    for i := 0; i < len(feed_follows); i++ {
+        fmt.Printf("Feed name: \"%s\"\n", feed_follows[i].FeedName)
+    }
+
+    return nil
+}
+
+func handlerUnfollow(s *state, cmd command, current_user database.User) error {
+    if len(cmd.args) != 1 {
+        return fmt.Errorf("There should be 2 arguments for unfollowing command, feed_url")
+    }
+
+    url := cmd.args[0]
+
+    ctx := context.Background()
+
+    params := database.DeleteFeedFollowByUrlAndNameParams{
+        url,
+        current_user.Name,
+    }
+
+    err := s.db.DeleteFeedFollowByUrlAndName(ctx, params)
+    if err != nil {
+        return err
+    }
+
+    fmt.Printf("User \"%s\" unfollowed feed with url \"%s\"", current_user.Name, url)
 
     return nil
 }
