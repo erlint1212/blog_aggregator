@@ -9,6 +9,7 @@ import (
     "time"
     "context"
 	"github.com/google/uuid"
+    "strconv"
 )
 
 type state struct {
@@ -302,7 +303,7 @@ func handlerFollowing(s *state, cmd command, current_user database.User) error {
 
 func handlerUnfollow(s *state, cmd command, current_user database.User) error {
     if len(cmd.args) != 1 {
-        return fmt.Errorf("There should be 2 arguments for unfollowing command, feed_url")
+        return fmt.Errorf("There should be 1 argument for unfollowing command, feed_url")
     }
 
     url := cmd.args[0]
@@ -320,6 +321,46 @@ func handlerUnfollow(s *state, cmd command, current_user database.User) error {
     }
 
     fmt.Printf("User \"%s\" unfollowed feed with url \"%s\"", current_user.Name, url)
+
+    return nil
+}
+
+func handlerBrowse(s *state, cmd command, current_user database.User) error {
+    if len(cmd.args) < 0 && len(cmd.args) > 1 {
+        return fmt.Errorf("There should be 1 or 0 arguments for command, limit")
+    }
+
+
+    limit := int32(2)
+    if len(cmd.args) == 1 {
+        i, err := strconv.ParseInt(cmd.args[0], 10, 32) 
+        if err != nil {
+            return err
+        }
+        limit = int32(i)
+    }
+
+    ctx := context.Background()
+    query_params := database.GetPostsForUserParams{
+        s.cfg.CurrentUserName,
+        limit,
+    }
+
+
+    posts, err := s.db.GetPostsForUser(ctx, query_params)
+    if err != nil {
+        return err
+    }
+    
+    fmt.Printf("%s posts first %d posts\n", s.cfg.CurrentUserName, limit)
+
+    if len(posts) == 0 {
+        fmt.Printf("No posts found!\n")
+    }
+
+    for i := 0; i < len(posts); i++ {
+        fmt.Printf("Published_at: \"%s\" Title: \"%s\" Description: \"%s\"\n", posts[i].PublishedAt, posts[i].Title, posts[i].Description)
+    }
 
     return nil
 }
